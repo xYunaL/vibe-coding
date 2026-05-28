@@ -20,7 +20,8 @@ User (Browser)
 → Custom Hooks    (useChatMessages / useMemes)
 → Client State    (React useState / Context)
 → Storage         (localStorage — UserProfile only)
-→ Static Data     (data.ts — Teams / F1 101 / Schedule / Standings)
+→ Static Data     (data.ts — Teams / F1 101 / Pit Wall 폴백)
+→ Route Handler   (/api/pitwall → OpenF1, ISR + 폴백)
 → Future Backend  (Server Actions / DB — 4회차 이후)
 ```
 
@@ -117,7 +118,8 @@ src/
 
     pitwall/
       types.ts                    ← DriverStanding, ConstructorStanding, RaceSchedule 타입
-      data.ts                     ← 2026 시즌 정적 순위·일정 데이터
+      data.ts                     ← Pit Wall 정적 폴백 (순위·일정), OpenF1 실패 시 사용
+      openf1.ts                   ← OpenF1 fetch·정규화 (서버 전용)
       components/
         PitWallPage.tsx           ← 순위 + 일정 레이아웃 컨테이너
         DriverStandingsTable.tsx  ← 드라이버 챔피언십 테이블
@@ -336,7 +338,8 @@ export type ConstructorStanding = {
 | API Server | 사용하지 않음 |
 | localStorage | UserProfile 전용 저장소 (nickname + selectedTeamId) |
 | 인메모리 State | 채팅 메시지, 밈 피드 (새로고침 시 초기화) |
-| 정적 data.ts | F1 101 가이드, 경기 일정, 챔피언십 순위 |
+| 정적 data.ts | F1 101 가이드, 팀/드라이버 라인업 + Pit Wall 폴백 데이터 |
+| 외부 API (OpenF1) | Pit Wall 드라이버·컨스트럭터 순위 + 경기 일정 (`/api/pitwall` Route Handler, ISR + 폴백) |
 
 ### 저장 흐름
 
@@ -367,7 +370,15 @@ User Action (밈 업로드 완료)
 
 ## 10. API Design
 
-이번 MVP에서는 서버 API를 구현하지 않는다.
+### 구현된 Route Handler
+
+| Route | Method | Purpose |
+|---|---|---|
+| `/api/pitwall` | `GET` | OpenF1(https://openf1.org)에서 드라이버·컨스트럭터 순위 + 2026 경기 일정을 서버에서 집계해 반환. ISR(`revalidate=3600`)로 캐싱하며, OpenF1 호출 실패 시 정적 `features/pitwall/data.ts`로 폴백한다. 응답에 `source: "openf1" \| "fallback"` 포함. |
+
+> OpenF1 호출은 free tier rate limit(3 req/s)를 피하기 위해 **순차** 호출한다. 드라이버 헤드샷(`headshot_url`)·`team_name`은 `championship_*` 응답과 `drivers` 엔드포인트를 `driver_number`로 조인해 정규화하며, `team_name`은 `TEAM_NAME_TO_ID`로 내부 teamId에 매핑한다.
+
+채팅·밈·프로필·F1 101은 여전히 서버 API 없이 클라이언트 State + localStorage + 정적 data.ts로 동작한다.
 
 ### 향후 확장 시 API 후보
 
@@ -383,9 +394,9 @@ User Action (밈 업로드 완료)
 
 ### 이번 회차 결정
 
-- API 구현 없음
+- Pit Wall 순위·일정만 단일 외부 API(OpenF1) 도입 — Route Handler + ISR + 정적 폴백
 - 서버 DB 없음
-- 클라이언트 State + localStorage + 정적 data.ts 중심
+- 채팅·밈·프로필·F1 101은 클라이언트 State + localStorage + 정적 data.ts 중심
 
 ---
 
@@ -456,7 +467,8 @@ User Action (밈 업로드 완료)
 | TypeScript 사용 | 데이터 구조와 컴포넌트 props 명확화 | 초기 타입 작성 비용 발생 |
 | 인메모리 채팅 (setInterval 시뮬레이션) | WebSocket은 CLAUDE.md "실시간 협업" 경계에 해당 | 새로고침 시 채팅 초기화 |
 | 이미지 URL 방식 밈 | "대용량 파일 업로드" 경계 회피 | 사용자가 이미지 URL을 직접 입력해야 함 |
-| 정적 data.ts로 F1 101·순위·일정 제공 | "다중 외부 API 연동" 경계 회피, 구현 단순화 | 실시간 데이터 반영 불가 (수동 갱신 필요) |
+| 정적 data.ts로 F1 101 제공 | 교육 콘텐츠라 외부 API 불필요 | 수동 작성·갱신 |
+| Pit Wall 순위·일정만 OpenF1 단일 API 도입 (개정) | 실제 2026 시즌 순위·일정·드라이버 사진 제공. **단일** API라 "다중 외부 API 연동" 경계에 해당하지 않음. 서버 Route Handler + ISR 캐싱 + 정적 폴백으로 위험 최소화 | 외부 의존성 추가(폴백으로 완화), team_name·driver_number 매핑 유지보수 |
 | localStorage → UserProfile만 저장 | 단일 사용자 MVP, 민감정보 미저장 원칙 | 다중 사용자·기기 간 동기화 없음 |
 | 상태 관리 라이브러리 미사용 | useState + 커스텀 훅으로 MVP 범위 충분 | 기능 확장 시 Context API 또는 Zustand 도입 검토 |
 | lucide-react 아이콘 | 참조 구현체와 동일, Tree-shaking 우수 | 별도 아이콘 시스템 추가 금지 |
@@ -505,6 +517,6 @@ Claude Code는 각 회차에서 아래 순서를 따른다.
 | 채팅 메시지를 새로고침 후에도 유지할 것인가? | 3회차 시작 전 | 인메모리 (새로고침 시 초기화) |
 | 밈 URL 유효성 검증 수준은? | 3회차 중 | `new URL()` 기본 형식 검증만 |
 | setInterval 시뮬레이터 주기는? | 3회차 중 | 7초 간격 (참조 구현체 기준) |
-| Pit Wall 데이터는 2025 시즌인가 2026 시즌인가? | 3회차 시작 전 | 2026 시즌 (현재 날짜 기준) |
+| Pit Wall 데이터 출처는? | ✅ 확정 | OpenF1 API(2026 시즌) `/api/pitwall` 경유, 실패 시 정적 폴백 |
 | 팀 수는 몇 개인가? | ✅ 확정 (change: expand-team-roster-and-cross-team-chat) | 2026 시즌 11개 팀 (Audi·Cadillac 진입, Sauber·VCARB 대체) |
 | 배포 플랫폼은 Vercel인가? | 4회차 시작 전 | Vercel (Next.js 공식 플랫폼) |

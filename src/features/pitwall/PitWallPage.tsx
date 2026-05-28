@@ -1,14 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import {
-  DRIVER_STANDINGS,
-  CONSTRUCTOR_STANDINGS,
-  RACE_SCHEDULE,
-} from "./data";
+import { useEffect, useState } from "react";
 import { getTeam } from "@/lib/teams";
-import { formatKstDateTime } from "@/lib/utils";
-import { cn } from "@/lib/utils";
+import { formatKstDateTime, cn } from "@/lib/utils";
+import type {
+  ConstructorStanding,
+  DriverStanding,
+  RaceSchedule,
+} from "./types";
 
 type SubTab = "drivers" | "constructors" | "schedule";
 
@@ -18,22 +17,52 @@ const SUBTABS: { id: SubTab; label: string }[] = [
   { id: "schedule", label: "Schedule" },
 ];
 
+type PitWallResponse = {
+  drivers: DriverStanding[];
+  constructors: ConstructorStanding[];
+  schedule: RaceSchedule[];
+  source: "openf1" | "fallback";
+};
+
 /**
- * Pit Wall shell (Session 2).
- * Subtab UI is live; deeper interactions land in Session 3 (FR-010, FR-011).
+ * Pit Wall (FR-010, FR-011). Standings + schedule come from /api/pitwall,
+ * which aggregates OpenF1 with ISR caching and a static fallback.
  */
 export function PitWallPage() {
   const [tab, setTab] = useState<SubTab>("drivers");
+  const [data, setData] = useState<PitWallResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/pitwall")
+      .then((r) => r.json())
+      .then((d: PitWallResponse) => {
+        if (alive) {
+          setData(d);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   return (
     <section className="rounded-2xl border border-white/8 bg-[var(--color-charcoal-800)] p-6">
-      <header className="border-b border-white/5 pb-4">
-        <h2 className="font-display text-xl font-black tracking-tight">
-          Pit Wall
-        </h2>
-        <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-white/45">
-          순위 · 일정 (KST)
-        </p>
+      <header className="flex items-start justify-between border-b border-white/5 pb-4">
+        <div>
+          <h2 className="font-display text-xl font-black tracking-tight">
+            Pit Wall
+          </h2>
+          <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-white/45">
+            순위 · 일정 (KST)
+          </p>
+        </div>
+        {data && <SourceBadge source={data.source} />}
       </header>
 
       <nav
@@ -59,15 +88,97 @@ export function PitWallPage() {
       </nav>
 
       <div className="mt-5">
-        {tab === "drivers" && <DriversTable />}
-        {tab === "constructors" && <ConstructorsGrid />}
-        {tab === "schedule" && <ScheduleList />}
+        {loading || !data ? (
+          <LoadingState />
+        ) : (
+          <>
+            {tab === "drivers" && <DriversTable rows={data.drivers} />}
+            {tab === "constructors" && (
+              <ConstructorsGrid rows={data.constructors} />
+            )}
+            {tab === "schedule" && <ScheduleList rows={data.schedule} />}
+          </>
+        )}
       </div>
     </section>
   );
 }
 
-function DriversTable() {
+function SourceBadge({ source }: { source: PitWallResponse["source"] }) {
+  const live = source === "openf1";
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-mono text-[10px] uppercase tracking-wider",
+        live
+          ? "bg-[var(--color-carbon-gold)]/10 text-[var(--color-carbon-gold)]"
+          : "bg-[var(--color-charcoal-700)] text-white/45"
+      )}
+      title={live ? "OpenF1 실시간 데이터" : "오프라인 캐시 데이터"}
+    >
+      <span
+        className={cn(
+          "h-1.5 w-1.5 rounded-full",
+          live ? "bg-[var(--color-carbon-gold)]" : "bg-white/30"
+        )}
+        aria-hidden
+      />
+      {live ? "OpenF1 Live" : "Cached"}
+    </span>
+  );
+}
+
+function LoadingState() {
+  return (
+    <div className="space-y-2" aria-busy="true" aria-live="polite">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div
+          key={i}
+          className="h-12 animate-pulse rounded-xl bg-[var(--color-charcoal-700)]"
+        />
+      ))}
+    </div>
+  );
+}
+
+function DriverAvatar({
+  url,
+  code,
+  teamColor,
+}: {
+  url?: string;
+  code: string;
+  teamColor?: string;
+}) {
+  const [broken, setBroken] = useState(false);
+  const ring = { boxShadow: `0 0 0 2px ${teamColor ?? "rgba(255,255,255,0.2)"}` };
+
+  if (!url || broken) {
+    return (
+      <span
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--color-charcoal-600)] font-mono text-[9px] text-white/70"
+        style={ring}
+        aria-hidden
+      >
+        {code || "—"}
+      </span>
+    );
+  }
+  return (
+    // F1 headshot URLs are external; <img> avoids next/image domain config.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={url}
+      alt=""
+      onError={() => setBroken(true)}
+      loading="lazy"
+      className="h-9 w-9 shrink-0 rounded-full bg-[var(--color-charcoal-700)] object-cover object-top"
+      style={ring}
+    />
+  );
+}
+
+function DriversTable({ rows }: { rows: DriverStanding[] }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-white/8">
       <table className="w-full text-sm">
@@ -80,25 +191,36 @@ function DriversTable() {
           </tr>
         </thead>
         <tbody>
-          {DRIVER_STANDINGS.map((d) => {
+          {rows.map((d) => {
             const team = getTeam(d.teamId);
             return (
               <tr
-                key={d.code}
+                key={`${d.rank}-${d.code}`}
                 className="border-t border-white/5 hover:bg-white/[0.02]"
               >
                 <td className="px-3 py-2 font-mono text-white/70">{d.rank}</td>
                 <td className="px-3 py-2">
-                  <span className="font-mono text-white/40">{d.code}</span>{" "}
-                  <span className="text-white">{d.name}</span>
+                  <div className="flex items-center gap-2.5">
+                    <DriverAvatar
+                      url={d.headshotUrl}
+                      code={d.code}
+                      teamColor={team?.baseColor}
+                    />
+                    <span>
+                      <span className="font-mono text-white/40">{d.code}</span>{" "}
+                      <span className="text-white">{d.name}</span>
+                    </span>
+                  </div>
                 </td>
                 <td className="px-3 py-2">
                   <span
-                    className="inline-block h-2 w-2 rounded-full"
+                    className="mr-1.5 inline-block h-2 w-2 rounded-full align-middle"
                     style={{ background: team?.baseColor }}
                     aria-hidden
-                  />{" "}
-                  <span className="text-white/70">{team?.name ?? d.teamId}</span>
+                  />
+                  <span className="align-middle text-white/70">
+                    {team?.name ?? d.teamId}
+                  </span>
                 </td>
                 <td className="px-3 py-2 text-right font-mono text-white">
                   {d.points}
@@ -112,14 +234,14 @@ function DriversTable() {
   );
 }
 
-function ConstructorsGrid() {
+function ConstructorsGrid({ rows }: { rows: ConstructorStanding[] }) {
   return (
     <ul className="grid gap-3 sm:grid-cols-2">
-      {CONSTRUCTOR_STANDINGS.map((c) => {
+      {rows.map((c) => {
         const team = getTeam(c.teamId);
         return (
           <li
-            key={c.teamId}
+            key={`${c.rank}-${c.teamId}`}
             className="flex items-center justify-between rounded-xl border border-white/8 bg-[var(--color-charcoal-700)] p-4"
           >
             <div className="flex items-center gap-3">
@@ -145,11 +267,11 @@ function ConstructorsGrid() {
   );
 }
 
-function ScheduleList() {
-  const nextRace = RACE_SCHEDULE.find((r) => r.status === "upcoming");
+function ScheduleList({ rows }: { rows: RaceSchedule[] }) {
+  const nextRace = rows.find((r) => r.status === "upcoming");
   return (
     <ul className="grid gap-2">
-      {RACE_SCHEDULE.map((race) => {
+      {rows.map((race) => {
         const isNext = race === nextRace;
         return (
           <li
@@ -175,7 +297,9 @@ function ScheduleList() {
             <span
               className={cn(
                 "font-mono text-[10px] uppercase tracking-wider",
-                race.status === "completed" ? "text-white/40" : "text-[var(--color-carbon-gold)]"
+                race.status === "completed"
+                  ? "text-white/40"
+                  : "text-[var(--color-carbon-gold)]"
               )}
             >
               {race.status === "completed" ? "완료" : isNext ? "다음 경기" : "예정"}

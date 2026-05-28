@@ -15,6 +15,8 @@ export type DriverStanding = {
   code: string;
   teamId: string;
   points: number;
+  /** Driver headshot URL (from OpenF1); absent for static fallback data. */
+  headshotUrl?: string;
 };
 
 export type ConstructorStanding = {
