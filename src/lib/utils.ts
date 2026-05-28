@@ -41,3 +41,36 @@ export function formatKstDateTime(iso: string): string {
     return iso;
   }
 }
+
+/**
+ * Format an ISO timestamp into a 12-hour KST clock (e.g. "8:30 PM").
+ */
+export function formatKstClock(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: "Asia/Seoul",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+/**
+ * Format an ISO timestamp into KST "MM.DD" (e.g. "06.05").
+ */
+export function formatKstMonthDay(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString("en-US", {
+      month: "2-digit",
+      day: "2-digit",
+      timeZone: "Asia/Seoul",
+    }).replace("/", ".");
+  } catch {
+    return iso;
+  }
+}

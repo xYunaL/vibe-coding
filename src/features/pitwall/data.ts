@@ -4,7 +4,12 @@ import type {
   ConstructorStanding,
 } from "./types";
 
-export const RACE_SCHEDULE: RaceSchedule[] = [
+type FallbackRace = Pick<
+  RaceSchedule,
+  "round" | "grandPrix" | "country" | "dateUtc" | "status"
+>;
+
+const FALLBACK_RACES: FallbackRace[] = [
   {
     round: 1,
     grandPrix: "바레인 그랑프리",
@@ -76,6 +81,15 @@ export const RACE_SCHEDULE: RaceSchedule[] = [
     status: "upcoming",
   },
 ];
+
+/** Fallback schedule has no per-session detail (sessions: []). */
+export const RACE_SCHEDULE: RaceSchedule[] = FALLBACK_RACES.map((r) => ({
+  ...r,
+  meetingKey: 0,
+  startUtc: r.dateUtc,
+  endUtc: r.dateUtc,
+  sessions: [],
+}));
 
 export const DRIVER_STANDINGS: DriverStanding[] = [
   { rank: 1, name: "Max Verstappen", code: "VER", teamId: "redbull", points: 412 },

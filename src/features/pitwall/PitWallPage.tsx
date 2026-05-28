@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { getTeam } from "@/lib/teams";
-import { formatKstDateTime, cn } from "@/lib/utils";
+import { formatKstClock, formatKstMonthDay, cn } from "@/lib/utils";
 import type {
   ConstructorStanding,
   DriverStanding,
   RaceSchedule,
+  RaceSession,
+  SessionResult,
 } from "./types";
 
 type SubTab = "drivers" | "constructors" | "schedule";
@@ -269,44 +271,243 @@ function ConstructorsGrid({ rows }: { rows: ConstructorStanding[] }) {
 
 function ScheduleList({ rows }: { rows: RaceSchedule[] }) {
   const nextRace = rows.find((r) => r.status === "upcoming");
+  const [expanded, setExpanded] = useState<number | null>(null);
+  const [activeSession, setActiveSession] = useState<RaceSession | null>(null);
+
   return (
-    <ul className="grid gap-2">
-      {rows.map((race) => {
-        const isNext = race === nextRace;
-        return (
-          <li
-            key={race.round}
-            className={cn(
-              "flex items-center justify-between rounded-xl border p-4",
-              isNext
-                ? "border-[var(--color-f1-red)] bg-[var(--color-f1-red)]/8"
-                : "border-white/8 bg-[var(--color-charcoal-700)]"
-            )}
-          >
-            <div className="flex items-center gap-3">
-              <span className="font-mono text-xs text-white/45 w-8">
-                R{race.round}
-              </span>
-              <div>
-                <p className="text-sm font-bold text-white">{race.grandPrix}</p>
-                <p className="font-mono text-[10px] uppercase tracking-wider text-white/45">
-                  {race.country} · {formatKstDateTime(race.dateUtc)}
-                </p>
-              </div>
-            </div>
-            <span
+    <>
+      <ul className="grid gap-2">
+        {rows.map((race) => {
+          const isNext = race === nextRace;
+          const open = expanded === race.round;
+          const period =
+            formatKstMonthDay(race.startUtc) === formatKstMonthDay(race.endUtc)
+              ? formatKstMonthDay(race.startUtc)
+              : `${formatKstMonthDay(race.startUtc)} – ${formatKstMonthDay(
+                  race.endUtc
+                )}`;
+          return (
+            <li
+              key={race.round}
               className={cn(
-                "font-mono text-[10px] uppercase tracking-wider",
-                race.status === "completed"
-                  ? "text-white/40"
-                  : "text-[var(--color-carbon-gold)]"
+                "overflow-hidden rounded-xl border",
+                isNext
+                  ? "border-[var(--color-f1-red)] bg-[var(--color-f1-red)]/8"
+                  : "border-white/8 bg-[var(--color-charcoal-700)]"
               )}
             >
-              {race.status === "completed" ? "완료" : isNext ? "다음 경기" : "예정"}
-            </span>
-          </li>
-        );
-      })}
-    </ul>
+              <button
+                type="button"
+                onClick={() => setExpanded(open ? null : race.round)}
+                aria-expanded={open}
+                className="flex w-full items-center justify-between gap-3 p-4 text-left"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="w-8 font-mono text-xs text-white/45">
+                    R{race.round}
+                  </span>
+                  <div>
+                    <p className="text-sm font-bold text-white">
+                      {race.grandPrix}
+                    </p>
+                    <p className="font-mono text-[10px] uppercase tracking-wider text-white/45">
+                      {race.country}
+                    </p>
+                    <p className="mt-1 font-display text-lg font-black tracking-tight text-white">
+                      {period}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      "font-mono text-[10px] uppercase tracking-wider",
+                      race.status === "completed"
+                        ? "text-white/40"
+                        : "text-[var(--color-carbon-gold)]"
+                    )}
+                  >
+                    {race.status === "completed"
+                      ? "완료"
+                      : isNext
+                        ? "다음 경기"
+                        : "예정"}
+                  </span>
+                  <span
+                    className="font-mono text-white/35"
+                    aria-hidden
+                  >
+                    {open ? "▲" : "▼"}
+                  </span>
+                </div>
+              </button>
+
+              {open && (
+                <div className="border-t border-white/8 p-2">
+                  {race.sessions.length === 0 ? (
+                    <p className="px-2 py-3 font-mono text-[11px] uppercase tracking-wider text-white/40">
+                      세션 정보 없음
+                    </p>
+                  ) : (
+                    <ul className="grid gap-1">
+                      {race.sessions.map((s) => (
+                        <li key={s.sessionKey}>
+                          <button
+                            type="button"
+                            disabled={!s.completed}
+                            onClick={() => setActiveSession(s)}
+                            className={cn(
+                              "flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left transition-colors",
+                              s.completed
+                                ? "cursor-pointer hover:bg-white/[0.04]"
+                                : "cursor-not-allowed opacity-45"
+                            )}
+                          >
+                            <span className="font-mono text-[11px] uppercase tracking-wider text-white/75">
+                              {formatKstMonthDay(s.startUtc)}
+                              <span className="mx-1.5 text-white/25">/</span>
+                              {s.name}
+                              <span className="mx-1.5 text-white/25">/</span>
+                              {formatKstClock(s.startUtc)} -{" "}
+                              {formatKstClock(s.endUtc)}
+                            </span>
+                            <span className="font-mono text-[10px] uppercase tracking-wider text-white/35">
+                              {s.completed ? "결과 보기" : "예정"}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      {activeSession && (
+        <SessionResultModal
+          session={activeSession}
+          onClose={() => setActiveSession(null)}
+        />
+      )}
+    </>
+  );
+}
+
+function SessionResultModal({
+  session,
+  onClose,
+}: {
+  session: RaceSession;
+  onClose: () => void;
+}) {
+  const [result, setResult] = useState<SessionResult | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/pitwall/session/${session.sessionKey}`)
+      .then((r) => r.json())
+      .then((d: SessionResult) => {
+        if (alive) {
+          setResult(d);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [session.sessionKey]);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="session-result-title"
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-2xl border border-white/8 bg-[var(--color-charcoal-800)]"
+      >
+        <header className="flex items-center justify-between border-b border-white/5 p-5">
+          <div>
+            <h3
+              id="session-result-title"
+              className="font-display text-lg font-black tracking-tight"
+            >
+              {session.name}
+            </h3>
+            <p className="mt-0.5 font-mono text-[10px] uppercase tracking-wider text-white/45">
+              {formatKstMonthDay(session.startUtc)} 결과
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="닫기"
+            className="rounded-full px-3 py-1 font-mono text-xs text-white/55 hover:text-white"
+          >
+            ✕
+          </button>
+        </header>
+
+        <div className="overflow-y-auto p-3">
+          {loading ? (
+            <div className="space-y-2" aria-busy="true">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-10 animate-pulse rounded-lg bg-[var(--color-charcoal-700)]"
+                />
+              ))}
+            </div>
+          ) : !result || result.rows.length === 0 ? (
+            <p className="py-10 text-center font-mono text-[11px] uppercase tracking-wider text-white/40">
+              결과를 불러올 수 없습니다
+            </p>
+          ) : (
+            <ul className="grid gap-1">
+              {result.rows.map((row) => {
+                const team = getTeam(row.teamId);
+                return (
+                  <li
+                    key={row.driverNumber}
+                    className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-white/[0.02]"
+                  >
+                    <span className="w-6 text-center font-mono text-sm text-white/70">
+                      {row.position || "—"}
+                    </span>
+                    <DriverAvatar
+                      url={row.headshotUrl}
+                      code={row.code}
+                      teamColor={team?.baseColor}
+                    />
+                    <span className="flex-1 text-sm">
+                      <span className="font-mono text-white/40">{row.code}</span>{" "}
+                      <span className="text-white">{row.name}</span>
+                    </span>
+                    <span className="font-mono text-[11px] text-white/55">
+                      {team?.name ?? row.teamId}
+                    </span>
+                    {result.hasPoints && (
+                      <span className="w-10 text-right font-mono text-sm text-white">
+                        {row.points ?? 0}
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
