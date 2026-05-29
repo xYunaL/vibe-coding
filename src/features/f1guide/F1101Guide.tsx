@@ -81,7 +81,7 @@ export function F1101Guide() {
           description={`"${keyword.trim()}"에 해당하는 용어를 찾지 못했습니다.`}
         />
       ) : (
-        <ul className="mt-5 grid gap-3 sm:grid-cols-2">
+        <ul className="mt-5 grid items-start gap-3 sm:grid-cols-2">
           {entries.map((entry) => (
             <F1GuideCard key={entry.id} entry={entry} />
           ))}

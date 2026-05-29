@@ -41,6 +41,11 @@
 /* =============================================================
  * Base
  * ============================================================= */
+html {
+  /* Slightly larger global type (16 → 17px); Tailwind rem sizes scale with this. */
+  font-size: 17px;
+}
+
 html,
 body {
   background: var(--color-charcoal-900);

@@ -43,11 +43,24 @@ export function ChatShell({
   maxHeight = 420,
 }: Props) {
   const [draft, setDraft] = useState("");
+  const listRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  // Whether the user is parked at the bottom of the message list.
+  const atBottomRef = useRef(true);
 
-  // Auto-scroll to the newest message.
+  function handleScroll() {
+    const el = listRef.current;
+    if (!el) return;
+    atBottomRef.current =
+      el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  }
+
+  // Auto-scroll only when already at the bottom — incoming messages won't
+  // yank the view while the user is reading earlier ones.
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    if (atBottomRef.current) {
+      endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
   }, [messages.length]);
 
   function handleSend() {
@@ -56,6 +69,8 @@ export function ChatShell({
     if (!text) return;
     onSend(text);
     setDraft("");
+    // Sending your own message always follows to the bottom.
+    atBottomRef.current = true;
   }
 
   return (
@@ -87,6 +102,8 @@ export function ChatShell({
       )}
 
       <div
+        ref={listRef}
+        onScroll={handleScroll}
         className="mt-4 flex-1 space-y-3 overflow-y-auto pr-1"
         style={{ minHeight, maxHeight }}
       >
