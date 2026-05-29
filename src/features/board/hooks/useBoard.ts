@@ -67,9 +67,10 @@ export function useBoard() {
   );
 
   const addComment = useCallback(
-    (postId: string, text: string, profile: UserProfile) => {
+    (postId: string, text: string, profile: UserProfile, imageUrl?: string) => {
       const trimmed = text.trim();
-      if (!trimmed) return;
+      const url = imageUrl?.trim() || undefined;
+      if (!trimmed && !url) return;
       setPosts((prev) =>
         prev.map((p) =>
           p.id === postId
@@ -82,6 +83,7 @@ export function useBoard() {
                     authorNickname: profile.nickname,
                     authorTeamId: primaryTeamId(profile) ?? "",
                     text: trimmed,
+                    imageUrl: url,
                     createdAt: new Date().toISOString(),
                   },
                 ],
@@ -95,3 +97,5 @@ export function useBoard() {
 
   return { posts, likedIds, addPost, toggleLike, addComment };
 }
+
+export type BoardApi = ReturnType<typeof useBoard>;

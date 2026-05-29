@@ -14,27 +14,15 @@ import type { UserProfile } from "@/lib/types";
 import { BoardTeamTabs } from "./BoardTeamTabs";
 import { PostCard } from "./PostCard";
 import { PostComposer } from "./PostComposer";
-import type { BoardScope, Post } from "./types";
+import type { BoardApi } from "./hooks/useBoard";
+import type { BoardScope } from "./types";
 
 type SortOrder = "latest" | "popular";
-
-type BoardApi = {
-  posts: Post[];
-  likedIds: Set<string>;
-  addPost: (input: {
-    scope: BoardScope;
-    teamId?: string;
-    title: string;
-    body: string;
-    profile: UserProfile;
-  }) => void;
-  toggleLike: (id: string) => void;
-  addComment: (postId: string, text: string, profile: UserProfile) => void;
-};
 
 type Props = {
   profile: UserProfile | null;
   board: BoardApi;
+  onOpenPost: (postId: string) => void;
 };
 
 const SORTS: { id: SortOrder; label: string }[] = [
@@ -45,7 +33,7 @@ const SORTS: { id: SortOrder; label: string }[] = [
 /**
  * 게시판 — 전체/팀별 서브탭. 글쓰기/댓글 권한은 채팅과 동일(canPostInTeamChat).
  */
-export function BoardView({ profile, board }: Props) {
+export function BoardView({ profile, board, onOpenPost }: Props) {
   const [scope, setScope] = useState<BoardScope>("global");
   const [activeTeamId, setActiveTeamId] = useState<string>(() =>
     defaultGarageTeamId(profile)
@@ -174,11 +162,8 @@ export function BoardView({ profile, board }: Props) {
               key={post.id}
               post={post}
               liked={board.likedIds.has(post.id)}
-              canComment={canWrite}
+              onOpen={() => onOpenPost(post.id)}
               onToggleLike={board.toggleLike}
-              onAddComment={(postId, text) =>
-                profile && board.addComment(postId, text, profile)
-              }
             />
           ))}
         </div>

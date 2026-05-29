@@ -7,6 +7,18 @@ export function cn(...classes: Array<string | false | null | undefined>): string
 }
 
 /**
+ * True when `value` is a valid http(s) URL (for user-supplied image URLs).
+ */
+export function isValidUrl(value: string): boolean {
+  try {
+    const u = new URL(value.trim());
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Format an ISO timestamp into KST short form (e.g. "오후 9:25").
  */
 export function formatKstTime(iso: string): string {

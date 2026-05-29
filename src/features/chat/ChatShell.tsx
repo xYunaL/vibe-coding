@@ -137,6 +137,8 @@ export function ChatShell({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing || e.key === "Process" || e.keyCode === 229)
+              return;
             if (e.key === "Enter") handleSend();
           }}
           disabled={!canPost}

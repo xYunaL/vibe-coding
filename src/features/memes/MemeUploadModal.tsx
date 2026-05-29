@@ -1,20 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { isValidUrl } from "@/lib/utils";
 
 type Props = {
   onClose: () => void;
   onSubmit: (input: { imageUrl: string; caption?: string }) => void;
 };
-
-function isValidUrl(value: string): boolean {
-  try {
-    const u = new URL(value.trim());
-    return u.protocol === "http:" || u.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Meme upload modal (FR-006). Image URL is required and must be a valid
@@ -94,6 +86,8 @@ export function MemeUploadModal({ onClose, onSubmit }: Props) {
             value={caption}
             onChange={(e) => setCaption(e.target.value)}
             onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing || e.key === "Process" || e.keyCode === 229)
+                return;
               if (e.key === "Enter" && urlOk) handleSubmit();
             }}
             placeholder="(선택) 한 줄 캡션"

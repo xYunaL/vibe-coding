@@ -5,6 +5,7 @@ export type Comment = {
   authorNickname: string;
   authorTeamId: string;
   text: string;
+  imageUrl?: string;
   createdAt: string;
 };
 
